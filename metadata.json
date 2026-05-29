@@ -1,0 +1,6 @@
+{
+  "name": "Repertório",
+  "description": "Um ambiente criativo e expressivo para catalogar referências, ideias, insights, e conexões visuais ou textuais.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

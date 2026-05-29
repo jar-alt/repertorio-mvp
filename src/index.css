@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-handwriting: "Caveat", cursive;
+}
+
+/* Custom Utilities and Helpers */
+@utility hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+  &::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+}
+
+/* Custom Dot matrix pattern for Draft/Concept items */
+@utility bg-dot-pattern {
+  background-image: radial-gradient(#D4A853 1.25px, transparent 1.25px);
+  background-size: 16px 16px;
+  background-color: #FAF8F5;
+}
+
+/* Safeguard for mobile safe space spacing */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+body {
+  background-color: #FAF8F5; /* Warm curatorial studio white */
+  color: #1A1A1A;
+}
+
