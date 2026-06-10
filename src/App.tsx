@@ -367,6 +367,7 @@ export default function App() {
                   onBack={() => setSelectedCard(null)}
                   onUpdate={handleUpdateCard}
                   onDelete={handleDeleteCard}
+                  onSelectCard={setSelectedCard}
                 />
               </motion.div>
             ) : (

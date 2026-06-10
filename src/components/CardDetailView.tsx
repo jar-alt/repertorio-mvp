@@ -23,6 +23,7 @@ interface CardDetailViewProps {
   onBack: () => void;
   onUpdate: (updatedCard: Card) => void;
   onDelete: (id: string) => void;
+  onSelectCard: (card: Card) => void;
 }
 
 export default function CardDetailView({ 
@@ -31,7 +32,8 @@ export default function CardDetailView({
   projects, 
   onBack, 
   onUpdate, 
-  onDelete 
+  onDelete,
+  onSelectCard
 }: CardDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(card.title || '');
@@ -364,10 +366,11 @@ export default function CardDetailView({
                 {relatedIdeas.map((rel) => {
                   // Determine tags highlight or generic display
                   return (
-                    <div 
+                    <button
                       key={rel.id}
-                      onClick={() => onUpdate({ ...rel })} // Visual switch to this card
-                      className="flex-shrink-0 w-[145px] p-3 to-pointer bg-white border border-[#E8E4DC] rounded-lg shadow-2xs hover:shadow-xs hover:border-[#D4A853]/60 transition-all flex flex-col justify-between h-[110px] cursor-pointer snap-start select-none"
+                      type="button"
+                      onClick={() => onSelectCard(rel)}
+                      className="flex-shrink-0 w-[145px] p-3 text-left bg-white border border-[#E8E4DC] rounded-lg shadow-2xs hover:shadow-xs hover:border-[#D4A853]/60 transition-all flex flex-col justify-between h-[110px] cursor-pointer snap-start select-none"
                     >
                       <div className="inline-block bg-[#F0EDE8] text-[#7A7670] font-sans font-bold text-[8.5px] px-1.5 py-0.5 rounded-sm uppercase tracking-wider self-start mb-2">
                         {rel.type}
@@ -375,7 +378,7 @@ export default function CardDetailView({
                       <span className="font-display text-[13px] text-gray-800 leading-snug line-clamp-3 font-semibold">
                         {rel.title || rel.content}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
