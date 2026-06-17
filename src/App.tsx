@@ -12,10 +12,12 @@ import {
   HelpCircle,
   FolderOpen
 } from 'lucide-react';
+import type { Session, User } from '@supabase/supabase-js';
 
 // Core imports
 import { Card, Project, CardType } from './types';
 import { INITIAL_CARDS, INITIAL_PROJECTS } from './data';
+import { supabase } from './supabaseClient';
 
 // Components
 import Header from './components/Header';
@@ -51,6 +53,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_PROJECTS;
   });
 
+  const [session, setSession] = useState<Session | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+
   // Keep localStorage up-to-date
   useEffect(() => {
     localStorage.setItem('repertorio_cards_v1', JSON.stringify(cards));
@@ -59,6 +66,70 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('repertorio_projects_v1', JSON.stringify(projects));
   }, [projects]);
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+      setCurrentUser(data.session?.user ?? null);
+    };
+
+    initAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setCurrentUser(session?.user ?? null);
+    });
+
+    return () => {
+      authListener.subscription?.unsubscribe();
+    };
+  }, []);
+
+  const handleSignUp = async (email: string, password: string) => {
+    setAuthLoading(true);
+    setAuthMessage(null);
+
+    const { error } = await supabase.auth.signUp({ email, password });
+    setAuthLoading(false);
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setAuthMessage('Cadastro iniciado! Verifique seu email para confirmar a conta, se necessário.');
+  };
+
+  const handleSignIn = async (email: string, password: string) => {
+    setAuthLoading(true);
+    setAuthMessage(null);
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setAuthLoading(false);
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setAuthMessage('Login realizado com sucesso!');
+  };
+
+  const handleSignOut = async () => {
+    setAuthLoading(true);
+    setAuthMessage(null);
+
+    const { error } = await supabase.auth.signOut();
+    setAuthLoading(false);
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setAuthMessage('Sessão encerrada.');
+  };
 
   // Recalculate Project item counts dynamically based on cards linked
   const dynamicProjects = useMemo(() => {
@@ -559,6 +630,12 @@ export default function App() {
                   <ProfileView 
                     cards={cards}
                     projects={dynamicProjects}
+                    user={currentUser}
+                    authLoading={authLoading}
+                    authMessage={authMessage}
+                    onSignUp={handleSignUp}
+                    onSignIn={handleSignIn}
+                    onSignOut={handleSignOut}
                     onResetDatabase={handleResetDatabase}
                     onImportBackup={handleImportBackup}
                     onClearAll={handleClearAll}

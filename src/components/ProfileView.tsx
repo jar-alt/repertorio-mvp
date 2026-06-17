@@ -1,39 +1,44 @@
-import React, { useMemo } from 'react';
-import { 
-  User, 
-  Database, 
-  Download, 
-  Sparkles, 
-  FolderSync, 
+import React, { useMemo, useState } from 'react';
+import {
+  Download,
+  Sparkles,
+  FolderSync,
   Trash2,
-  Calendar,
-  Layers,
   CheckCircle,
-  Lightbulb,
-  FileText,
-  Mail
+  Mail,
 } from 'lucide-react';
 import { Card, Project } from '../types';
 
 interface ProfileViewProps {
   cards: Card[];
   projects: Project[];
-  userEmail?: string;
+  user: { email: string | null } | null;
+  authLoading: boolean;
+  authMessage: string | null;
+  onSignUp: (email: string, password: string) => Promise<void>;
+  onSignIn: (email: string, password: string) => Promise<void>;
+  onSignOut: () => Promise<void>;
   onResetDatabase: () => void;
   onImportBackup: (data: string) => void;
   onClearAll: () => void;
 }
 
-export default function ProfileView({ 
-  cards, 
-  projects, 
-  userEmail = 'jar@cesar.school', 
-  onResetDatabase, 
+export default function ProfileView({
+  cards,
+  projects,
+  user,
+  authLoading,
+  authMessage,
+  onSignUp,
+  onSignIn,
+  onSignOut,
+  onResetDatabase,
   onImportBackup,
-  onClearAll 
+  onClearAll,
 }: ProfileViewProps) {
-  
-  // Calculate category aggregates
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
   const stats = useMemo(() => {
     const counts: Record<string, number> = {
       thought: 0,
@@ -44,28 +49,34 @@ export default function ProfileView({
       reference: 0,
       sketch: 0,
       concept: 0,
-      observation: 0
+      observation: 0,
     };
-    
-    cards.forEach(c => {
-      if (counts[c.type] !== undefined) {
-        counts[c.type]++;
+
+    cards.forEach((card) => {
+      if (counts[card.type] !== undefined) {
+        counts[card.type] += 1;
       } else {
-        counts[c.type] = 1;
+        counts[card.type] = 1;
       }
     });
 
     return counts;
   }, [cards]);
 
-  // Total tags list
   const totalTags = useMemo(() => {
     const tagsSet = new Set<string>();
-    cards.forEach(c => c.tags.forEach(t => tagsSet.add(t.toLowerCase())));
+    cards.forEach((card) => card.tags.forEach((tag) => tagsSet.add(tag.toLowerCase())));
     return tagsSet.size;
   }, [cards]);
 
-  // Export JSON backups
+  const handleSignUpClick = async () => {
+    await onSignUp(email.trim(), password.trim());
+  };
+
+  const handleSignInClick = async () => {
+    await onSignIn(email.trim(), password.trim());
+  };
+
   const handleExport = () => {
     const dataStr = JSON.stringify({ cards, projects }, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
@@ -79,7 +90,6 @@ export default function ProfileView({
     URL.revokeObjectURL(url);
   };
 
-  // Import file handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -96,206 +106,243 @@ export default function ProfileView({
 
   return (
     <div className="flex-1 max-w-3xl mx-auto px-4 py-8 pb-24">
-      {/* Studio Member Profile Header */}
-      <div className="p-6 bg-white border border-[#E8E4DC] rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.05)] mb-8 flex flex-col sm:flex-row items-center gap-5">
-        <div className="w-16 h-16 rounded-full bg-[#176970] text-[#e9fdff] flex items-center justify-center font-display text-2xl font-bold border-2 border-[#D4A853]">
-          {userEmail ? userEmail[0].toUpperCase() : 'U'}
-        </div>
-        <div className="text-center sm:text-left space-y-1">
-          <div className="flex items-center justify-center sm:justify-start gap-1.5">
-            <span className="font-sans font-bold text-[10px] tracking-widest text-[#B8892A] uppercase bg-[#FDF3DC] px-2 py-0.5 rounded-sm">Membro Criativo</span>
+      {!user ? (
+        <div className="mb-8 rounded-xl border border-[#E8E4DC] bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.05)] max-w-2xl mx-auto">
+          <div className="mb-4 text-center">
+            <h2 className="font-display text-xl font-bold text-gray-950">Acesso ao Repertório</h2>
+            <p className="mt-2 text-sm text-gray-500">Faça login ou cadastre uma conta usando seu email e senha.</p>
           </div>
-          <h2 className="font-display font-bold text-xl text-gray-950 flex items-center justify-center sm:justify-start gap-1">
-            Repertório Curatorial
-          </h2>
-          <p className="text-xs text-gray-500 font-sans flex items-center justify-center sm:justify-start gap-1">
-            <Mail size={12} className="text-gray-400" />
-            <span>{userEmail}</span>
-          </p>
+          <div className="grid gap-4">
+            <label className="block text-xs uppercase tracking-widest text-gray-500 font-semibold">
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-[#E8E4DC] px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#D4A853]"
+                placeholder="seu@email.com"
+              />
+            </label>
+            <label className="block text-xs uppercase tracking-widest text-gray-500 font-semibold">
+              Senha
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-[#E8E4DC] px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#D4A853]"
+                placeholder="Mínimo 6 caracteres"
+              />
+            </label>
+            {authMessage && (
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
+                {authMessage}
+              </div>
+            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={handleSignInClick}
+                disabled={authLoading}
+                className="w-full rounded-xl bg-[#176970] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#145b5b] disabled:opacity-60"
+              >
+                Entrar
+              </button>
+              <button
+                type="button"
+                onClick={handleSignUpClick}
+                disabled={authLoading}
+                className="w-full rounded-xl border border-[#D4A853] bg-white px-4 py-3 text-sm font-bold text-[#176970] transition hover:bg-[#F8F5ED] disabled:opacity-60"
+              >
+                Cadastrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-8 rounded-xl border border-[#E8E4DC] bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.05)] flex flex-col gap-5 sm:flex-row items-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#176970] text-2xl font-bold text-[#e9fdff] border-2 border-[#D4A853]">
+            {user.email ? user.email[0].toUpperCase() : 'U'}
+          </div>
+          <div className="text-center sm:text-left space-y-1">
+            <div className="flex items-center justify-center gap-1.5 sm:justify-start">
+              <span className="rounded-sm bg-[#FDF3DC] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#B8892A]">Membro Criativo</span>
+            </div>
+            <h2 className="font-display text-xl font-bold text-gray-950">Repertório Curatorial</h2>
+            <p className="flex items-center justify-center gap-1 text-xs text-gray-500 sm:justify-start">
+              <Mail size={12} className="text-gray-400" />
+              <span>{user.email}</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      <h3 className="mb-3.5 px-1 text-xs font-sans font-bold uppercase tracking-widest text-gray-400">Seu Progresso de Curadoria</h3>
+      <div className="grid gap-3.5 sm:grid-cols-4 mb-8">
+        <div className="rounded-[10px] border border-[#E8E4DC] bg-white p-4 shadow-3xs text-center">
+          <div className="text-[28px] font-display font-bold text-[#176970]">{cards.length}</div>
+          <div className="mt-1 text-[10.5px] font-sans font-semibold uppercase tracking-wider text-gray-400">Ideias Salvas</div>
+        </div>
+        <div className="rounded-[10px] border border-[#E8E4DC] bg-white p-4 shadow-3xs text-center">
+          <div className="text-[28px] font-display font-bold text-[#7B6991]">{projects.length}</div>
+          <div className="mt-1 text-[10.5px] font-sans font-semibold uppercase tracking-wider text-gray-400">Canais Ativos</div>
+        </div>
+        <div className="rounded-[10px] border border-[#E8E4DC] bg-white p-4 shadow-3xs text-center">
+          <div className="text-[28px] font-display font-bold text-[#B8892A]">{totalTags}</div>
+          <div className="mt-1 text-[10.5px] font-sans font-semibold uppercase tracking-wider text-gray-400">Tags Únicas</div>
+        </div>
+        <div className="rounded-[10px] border border-[#E8E4DC] bg-white p-4 shadow-3xs text-center">
+          <div className="text-[20px] font-display font-bold text-[#E58F65] leading-8">100%</div>
+          <div className="mt-1 text-[10.5px] font-sans font-semibold uppercase tracking-wider text-gray-400">Preservado Offline</div>
         </div>
       </div>
 
-      {/* Numeric Highlights KPI Grid */}
-      <h3 className="text-xs font-sans font-bold text-gray-400 uppercase tracking-widest mb-3.5 px-1">Seu Progresso de Curadoria</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mb-8">
-        <div className="p-4 bg-white border border-[#E8E4DC] rounded-[10px] shadow-3xs flex flex-col justify-center text-center">
-          <span className="text-[28px] font-display font-bold text-[#176970]">{cards.length}</span>
-          <span className="text-[10.5px] font-sans font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Ideias Salvas</span>
-        </div>
-        <div className="p-4 bg-white border border-[#E8E4DC] rounded-[10px] shadow-3xs flex flex-col justify-center text-center">
-          <span className="text-[28px] font-display font-bold text-[#7B6991]">{projects.length}</span>
-          <span className="text-[10.5px] font-sans font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Canais Ativos</span>
-        </div>
-        <div className="p-4 bg-white border border-[#E8E4DC] rounded-[10px] shadow-3xs flex flex-col justify-center text-center">
-          <span className="text-[28px] font-display font-bold text-[#B8892A]">{totalTags}</span>
-          <span className="text-[10.5px] font-sans font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Tags Únicas</span>
-        </div>
-        <div className="p-4 bg-white border border-[#E8E4DC] rounded-[10px] shadow-3xs flex flex-col justify-center text-center">
-          <span className="text-[20px] font-display font-bold text-[#E58F65] leading-8">100%</span>
-          <span className="text-[10.5px] font-sans font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Preservado Offline</span>
-        </div>
-      </div>
-
-      {/* Category Chart Bars */}
-      <div className="p-6 bg-white border border-[#E8E4DC] rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.05)] mb-8">
-        <h3 className="font-display font-bold text-md text-gray-900 mb-5 pb-2 border-b border-gray-100 flex items-center justify-between">
-          <span>Distribuição por Tipo</span>
-          <span className="text-[11px] font-sans text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-sm">análise composicional</span>
-        </h3>
-        
-        <div className="space-y-4 font-sans text-xs">
-          {/* Insights Progress stats bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between font-semibold">
-              <span className="text-gray-700">💡 Insights & Pensamentos</span>
-              <span className="text-gray-500">{(stats.insight || 0) + (stats.thought || 0)}</span>
+      {user && (
+        <>
+          <div className="mb-8 rounded-xl border border-[#E8E4DC] bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-md font-bold text-gray-900">Distribuição por Tipo</h3>
+                <p className="text-[11px] text-gray-400">análise composicional</p>
+              </div>
             </div>
-            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#D4A853] h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, (((stats.insight || 0) + (stats.thought || 0)) / (cards.length || 1)) * 100)}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Concepts Progress stats bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between font-semibold">
-              <span className="text-gray-700">🏛️ Conceitos Teóricos</span>
-              <span className="text-gray-500">{stats.concept || 0}</span>
-            </div>
-            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#176970] h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, ((stats.concept || 0) / (cards.length || 1)) * 100)}%` }}
-              />
-            </div>
-          </div>
-
-          {/* References & Links Progress stats bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between font-semibold">
-              <span className="text-gray-700">🔗 Referências de Site & Links</span>
-              <span className="text-gray-500">{(stats.reference || 0) + (stats.link || 0)}</span>
-            </div>
-            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#4A6FA5] h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, (((stats.reference || 0) + (stats.link || 0)) / (cards.length || 1)) * 100)}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Quotes Progress stats bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between font-semibold">
-              <span className="text-gray-700">💬 Citações Textuais</span>
-              <span className="text-gray-500">{stats.quote || 0}</span>
-            </div>
-            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#7B6991] h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, ((stats.quote || 0) / (cards.length || 1)) * 100)}%` }}
-              />
+            <div className="space-y-4 text-xs font-sans">
+              <div className="space-y-1.5">
+                <div className="flex justify-between font-semibold text-gray-700">
+                  <span>💡 Insights & Pensamentos</span>
+                  <span>{(stats.insight || 0) + (stats.thought || 0)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-[#D4A853] transition-all duration-500"
+                    style={{ width: `${Math.min(100, (((stats.insight || 0) + (stats.thought || 0)) / (cards.length || 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between font-semibold text-gray-700">
+                  <span>🏛️ Conceitos Teóricos</span>
+                  <span>{stats.concept || 0}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-[#176970] transition-all duration-500"
+                    style={{ width: `${Math.min(100, ((stats.concept || 0) / (cards.length || 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between font-semibold text-gray-700">
+                  <span>🔗 Referências de Site & Links</span>
+                  <span>{(stats.reference || 0) + (stats.link || 0)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-[#4A6FA5] transition-all duration-500"
+                    style={{ width: `${Math.min(100, (((stats.reference || 0) + (stats.link || 0)) / (cards.length || 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between font-semibold text-gray-700">
+                  <span>💬 Citações Textuais</span>
+                  <span>{stats.quote || 0}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-[#7B6991] transition-all duration-500"
+                    style={{ width: `${Math.min(100, ((stats.quote || 0) / (cards.length || 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between font-semibold text-gray-700">
+                  <span>🎨 Rascunhos, Imagens e Observações</span>
+                  <span>{(stats.sketch || 0) + (stats.image || 0) + (stats.observation || 0)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-[#E58F65] transition-all duration-500"
+                    style={{ width: `${Math.min(100, (((stats.sketch || 0) + (stats.image || 0) + (stats.observation || 0)) / (cards.length || 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Other types: Sketches, Images, Observations */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between font-semibold">
-              <span className="text-gray-700">🎨 Rascunhos, Imagens e Observações</span>
-              <span className="text-gray-500">{(stats.sketch || 0) + (stats.image || 0) + (stats.observation || 0)}</span>
-            </div>
-            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-[#E58F65] h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, (((stats.sketch || 0) + (stats.image || 0) + (stats.observation || 0)) / (cards.length || 1)) * 100)}%` }}
-              />
-            </div>
+          <h3 className="mb-3.5 px-1 text-xs font-sans font-bold uppercase tracking-widest text-gray-400">Ações do Administrador</h3>
+          <div className="rounded-xl border border-[#E8E4DC] bg-white shadow-3xs overflow-hidden text-xs font-sans">
+            <button
+              onClick={handleExport}
+              className="flex w-full items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-4 hover:bg-gray-50"
+            >
+              <div className="flex items-center gap-3 text-gray-500">
+                <Download size={18} />
+                <div>
+                  <div className="font-bold text-gray-900">Exportar backup do Repertório</div>
+                  <div className="text-[11px] text-gray-400">Baixar catálogo em arquivo formato .json</div>
+                </div>
+              </div>
+              <CheckCircle size={16} className="text-green-500" />
+            </button>
+            <label className="flex w-full cursor-pointer items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-4 hover:bg-gray-50 text-gray-500">
+              <div className="flex items-center gap-3">
+                <FolderSync size={18} />
+                <div>
+                  <div className="font-bold text-gray-900">Importar backup em JSON</div>
+                  <div className="text-[11px] text-gray-400">Fazer upload de backup compatível salvo previamente</div>
+                </div>
+              </div>
+              <input type="file" accept=".json" onChange={handleFileChange} className="hidden" />
+              <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-bold">Upload</span>
+            </label>
+            <button
+              onClick={() => {
+                if (confirm('Deseja substituir sua biblioteca atual de ideias e carregar a biblioteca modelo inicial? Suas alterações serão perdidas.')) {
+                  onResetDatabase();
+                }
+              }}
+              className="flex w-full items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-4 hover:bg-gray-50 text-yellow-800"
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles size={18} className="text-[#D4A853]" />
+                <div>
+                  <div className="font-bold text-gray-900">Recarregar biblioteca inicial</div>
+                  <div className="text-[11px] text-[#B8892A]">Recarrega o catálogo estético modelo com 16 ideias</div>
+                </div>
+              </div>
+              <span className="rounded-md border border-[#D4A853]/35 bg-[#FDF3DC] px-2 py-1 text-[10px] font-bold text-[#B8892A]">Reset</span>
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('ATENÇÃO: Deseja apagar todas as referências do seu Repertório? Esta ação é irreversível.')) {
+                  onClearAll();
+                }
+              }}
+              className="flex w-full items-center justify-between gap-3 bg-white px-4 py-4 hover:bg-red-50 text-red-600"
+            >
+              <div className="flex items-center gap-3">
+                <Trash2 size={18} className="text-red-500" />
+                <div>
+                  <div className="font-bold text-red-950">Excluir banco de dados inteiro</div>
+                  <div className="text-[11px] text-red-500/75">Limpa totalmente o localStorage e deleta todos os registros</div>
+                </div>
+              </div>
+              <span className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600">Apagar Tudo</span>
+            </button>
           </div>
-        </div>
-      </div>
 
-      {/* Backup controls & Storage System Management */}
-      <h3 className="text-xs font-sans font-bold text-gray-400 uppercase tracking-widest mb-3.5 px-1">Ações do Administrador</h3>
-      <div className="bg-white border border-[#E8E4DC] rounded-xl shadow-3xs overflow-hidden font-sans text-xs">
-        {/* Export Backup line */}
-        <button 
-          onClick={handleExport}
-          className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-55/65 text-left border-b border-gray-100 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="text-gray-400 group-hover:text-gray-700">
-              <Download size={18} />
-            </div>
-            <div>
-              <span className="block font-bold text-gray-900 text-[13px]">Exportar backup do Repertório</span>
-              <span className="block text-[11px] text-gray-400 mt-0.5">Baixar catálogo em arquivo formato .json</span>
-            </div>
+          <div className="mt-4 text-right">
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={authLoading}
+              className="rounded-xl bg-[#E58F65] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#c86c52] disabled:opacity-60"
+            >
+              Sair da Conta
+            </button>
           </div>
-          <CheckCircle size={16} className="text-green-500/70" />
-        </button>
-
-        {/* Import Backup file input button */}
-        <label className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-55/65 text-left border-b border-gray-100 transition-colors cursor-pointer">
-          <div className="flex items-center gap-3">
-            <div className="text-gray-400">
-              <FolderSync size={18} />
-            </div>
-            <div>
-              <span className="block font-bold text-gray-900 text-[13px]">Importar backup em JSON</span>
-              <span className="block text-[11px] text-gray-400 mt-0.5">Fazer upload de backup compatível salvo previamente</span>
-            </div>
-          </div>
-          <input 
-            type="file" 
-            accept=".json" 
-            onChange={handleFileChange} 
-            className="hidden" 
-          />
-          <span className="inline-block border border-gray-250 bg-gray-50 text-gray-500 px-2 py-0.5 text-[10px] rounded-md font-bold">Upload</span>
-        </label>
-
-        {/* Reload initial seed template data */}
-        <button 
-          onClick={() => {
-            if (confirm("Deseja substituir sua biblioteca atual de ideias e carregar a biblioteca modelo inicial? Suas alterações serão perdidas.")) {
-              onResetDatabase();
-            }
-          }}
-          className="w-full flex items-center justify-between p-4 bg-white hover:bg-yellow-50/50 text-left border-b border-gray-100 transition-colors text-yellow-800"
-        >
-          <div className="flex items-center gap-3">
-            <div className="text-[#D4A853]">
-              <Sparkles size={18} />
-            </div>
-            <div>
-              <span className="block font-bold text-gray-900 text-[13px]">Recarregar biblioteca inicial</span>
-              <span className="block text-[11px] text-[#B8892A] mt-0.5">Recarrega o catálogo estético modelo com 16 ideias</span>
-            </div>
-          </div>
-          <span className="inline-block border border-[#D4A853]/35 bg-[#FDF3DC] text-[#B8892A] px-2 py-0.5 text-[10px] rounded-md font-bold">Reset</span>
-        </button>
-
-        {/* Clear all cards database */}
-        <button 
-          onClick={() => {
-            if (confirm("ATENÇÃO: Deseja apagar todas as referências do seu Repertório? Esta ação é irreversível.")) {
-              onClearAll();
-            }
-          }}
-          className="w-full flex items-center justify-between p-4 bg-white hover:bg-red-50/50 text-left transition-colors text-red-600"
-        >
-          <div className="flex items-center gap-3">
-            <Trash2 size={18} className="text-red-500 shrink-0" />
-            <div>
-              <span className="block font-bold text-red-950 text-[13px]">Excluir banco de dados inteiro</span>
-              <span className="block text-[11px] text-red-500/75 mt-0.5">Limpa totalmente o localStorage e deleta todos os registros</span>
-            </div>
-          </div>
-          <span className="inline-block border border-red-200 bg-red-50 text-red-600 px-2 py-0.5 text-[10px] rounded-md font-bold">Apagar Tudo</span>
-        </button>
-      </div>
+        </>
+      )}
     </div>
   );
 }
