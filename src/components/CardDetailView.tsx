@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import type { User } from '@supabase/supabase-js';
 import { 
   ArrowLeft, 
   Edit3, 
@@ -12,7 +13,8 @@ import {
   Sparkles,
   ChevronRight,
   Bookmark,
-  Share2
+  Share2,
+  Lock
 } from 'lucide-react';
 import { Card, Project, CardType } from '../types';
 
@@ -20,6 +22,7 @@ interface CardDetailViewProps {
   card: Card;
   allCards: Card[];
   projects: Project[];
+  currentUser: User | null;
   onBack: () => void;
   onUpdate: (updatedCard: Card) => void;
   onDelete: (id: string) => void;
@@ -30,6 +33,7 @@ export default function CardDetailView({
   card, 
   allCards, 
   projects, 
+  currentUser,
   onBack, 
   onUpdate, 
   onDelete,
@@ -46,6 +50,11 @@ export default function CardDetailView({
   const [selectedProjects, setSelectedProjects] = useState<string[]>(card.projects || []);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Check if current user owns this card
+  const isOwner = useMemo(() => {
+    return currentUser && currentUser.id === card.user_id;
+  }, [currentUser, card.user_id]);
 
   // Derive related ideas based on shared tags or fallback to random cards
   const relatedIdeas = useMemo(() => {
@@ -114,22 +123,31 @@ export default function CardDetailView({
         <div className="flex items-center gap-2">
           {!isEditing ? (
             <>
-              <button 
-                onClick={() => setIsEditing(true)}
-                className="text-[#176970] p-2 hover:bg-gray-100 rounded-full transition-colors flex items-center gap-1.5 font-medium text-sm"
-                title="Editar card"
-              >
-                <Edit3 size={18} />
-                <span className="hidden sm:inline">Editar</span>
-              </button>
-              <button 
-                onClick={() => setShowDeleteConfirm(true)}
-                className="text-[#ac3434] p-2 hover:bg-red-50 rounded-full transition-colors flex items-center gap-1.5 font-medium text-sm"
-                title="Excluir card"
-              >
-                <Trash2 size={18} />
-                <span className="hidden sm:inline">Excluir</span>
-              </button>
+              {isOwner ? (
+                <>
+                  <button 
+                    onClick={() => setIsEditing(true)}
+                    className="text-[#176970] p-2 hover:bg-gray-100 rounded-full transition-colors flex items-center gap-1.5 font-medium text-sm"
+                    title="Editar card"
+                  >
+                    <Edit3 size={18} />
+                    <span className="hidden sm:inline">Editar</span>
+                  </button>
+                  <button 
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="text-[#ac3434] p-2 hover:bg-red-50 rounded-full transition-colors flex items-center gap-1.5 font-medium text-sm"
+                    title="Excluir card"
+                  >
+                    <Trash2 size={18} />
+                    <span className="hidden sm:inline">Excluir</span>
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Lock size={16} />
+                  <span>Card de outra pessoa</span>
+                </div>
+              )}
             </>
           ) : (
             <div className="flex gap-2">

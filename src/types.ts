@@ -12,6 +12,7 @@ export type CardType =
 
 export interface Card {
   id: string;
+  user_id: string; // Owner of the card
   type: CardType;
   title?: string;
   content: string;
@@ -22,11 +23,15 @@ export interface Card {
   source?: string;  // For references/links
   imageUrl?: string; // For images
   projects?: string[]; // List of Project IDs
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Project {
   id: string;
+  user_id: string; // Owner of the project
   name: string;
   description?: string;
   itemCount: number;
+  created_at?: string;
 }

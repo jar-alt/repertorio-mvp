@@ -18,6 +18,19 @@ import type { Session, User } from '@supabase/supabase-js';
 import { Card, Project, CardType } from './types';
 import { INITIAL_CARDS, INITIAL_PROJECTS } from './data';
 import { supabase } from './supabaseClient';
+import {
+  fetchUserCards,
+  fetchUserProjects,
+  createCard,
+  updateCard,
+  deleteCard,
+  createProject,
+  saveLocalCards,
+  saveLocalProjects,
+  clearLocalData,
+  getLocalCards,
+  getLocalProjects,
+} from './services/supabaseService';
 
 // Components
 import Header from './components/Header';
@@ -42,49 +55,99 @@ export default function App() {
   // Active workspace project filters
   const [activeProjectFilter, setActiveProjectFilter] = useState<string | null>(null);
 
-  // Core Data Lists - Local Storage Persistent
-  const [cards, setCards] = useState<Card[]>(() => {
-    const saved = localStorage.getItem('repertorio_cards_v1');
-    return saved ? JSON.parse(saved) : INITIAL_CARDS;
-  });
-
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('repertorio_projects_v1');
-    return saved ? JSON.parse(saved) : INITIAL_PROJECTS;
-  });
+  // Core Data Lists - Now synced with Supabase
+  const [cards, setCards] = useState<Card[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
 
   const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  
+  // Sync and loading states
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Keep localStorage up-to-date
+  // Keep localStorage up-to-date as fallback for offline
   useEffect(() => {
-    localStorage.setItem('repertorio_cards_v1', JSON.stringify(cards));
+    if (cards.length > 0) {
+      saveLocalCards(cards);
+    }
   }, [cards]);
 
   useEffect(() => {
-    localStorage.setItem('repertorio_projects_v1', JSON.stringify(projects));
+    if (projects.length > 0) {
+      saveLocalProjects(projects);
+    }
   }, [projects]);
 
+  // Initialize auth and fetch user data
   useEffect(() => {
     const initAuth = async () => {
       const { data } = await supabase.auth.getSession();
       setSession(data.session);
       setCurrentUser(data.session?.user ?? null);
+
+      // Load user data from Supabase if logged in
+      if (data.session?.user) {
+        await loadUserData(data.session.user.id);
+      } else {
+        // No session, try loading from offline fallback
+        setCards(getLocalCards());
+        setProjects(getLocalProjects());
+      }
     };
 
     initAuth();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setCurrentUser(session?.user ?? null);
+
+      // Load user data when auth state changes
+      if (session?.user) {
+        await loadUserData(session.user.id);
+      } else {
+        // User logged out, clear data
+        setCards([]);
+        setProjects([]);
+        clearLocalData();
+      }
     });
 
     return () => {
       authListener.subscription?.unsubscribe();
     };
   }, []);
+
+  // Load user data from Supabase
+  const loadUserData = async (userId: string) => {
+    try {
+      setIsLoadingData(true);
+      setSyncError(null);
+
+      const [fetchedCards, fetchedProjects] = await Promise.all([
+        fetchUserCards(userId),
+        fetchUserProjects(userId),
+      ]);
+
+      setCards(fetchedCards);
+      setProjects(fetchedProjects);
+      
+      // Also save to localStorage as fallback
+      saveLocalCards(fetchedCards);
+      saveLocalProjects(fetchedProjects);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      setSyncError('Erro ao carregar dados. Usando dados em cache.');
+      // Try to load from offline cache
+      setCards(getLocalCards());
+      setProjects(getLocalProjects());
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
 
   const handleSignUp = async (email: string, password: string) => {
     setAuthLoading(true);
@@ -128,6 +191,15 @@ export default function App() {
       return;
     }
 
+    // Clear all local data on logout
+    setCards([]);
+    setProjects([]);
+    clearLocalData();
+    setSelectedTag('Todas');
+    setSearchQuery('');
+    setActiveProjectFilter(null);
+    setSelectedCard(null);
+    
     setAuthMessage('Sessão encerrada.');
   };
 
@@ -143,54 +215,114 @@ export default function App() {
   }, [projects, cards]);
 
   // Handle adding new cards
-  const handleSaveCard = (newCardData: Omit<Card, 'id' | 'date'>) => {
-    const dateObj = new Date();
-    const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-    const formattedDate = `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
-
-    const newCard: Card = {
-      ...newCardData,
-      id: `card-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      date: formattedDate,
-    };
-
-    // If context project name is input, find or create project
-    if (newCardData.context) {
-      const matchedProj = projects.find(
-        (p) => p.name.toLowerCase() === newCardData.context?.toLowerCase()
-      );
-      if (matchedProj) {
-        newCard.projects = [matchedProj.id];
-      } else {
-        // Create new project active canal
-        const newProjId = `project-${Date.now()}`;
-        const newProj: Project = {
-          id: newProjId,
-          name: newCardData.context,
-          description: `Canal criado automaticamente para: ${newCardData.context}`,
-          itemCount: 1,
-        };
-        setProjects((prev) => [...prev, newProj]);
-        newCard.projects = [newProjId];
-      }
+  const handleSaveCard = async (newCardData: Omit<Card, 'id' | 'date'>) => {
+    if (!currentUser) {
+      setAuthMessage('Você precisa estar autenticado para criar um card.');
+      return;
     }
 
-    setCards((prev) => [newCard, ...prev]);
+    try {
+      setIsSyncing(true);
+      setSyncError(null);
+
+      const dateObj = new Date();
+      const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+      const formattedDate = `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+
+      const cardToCreate: Omit<Card, 'id' | 'created_at' | 'updated_at'> = {
+        ...newCardData,
+        user_id: currentUser.id,
+        date: formattedDate,
+      };
+
+      // If context project name is input, find or create project
+      if (newCardData.context) {
+        const matchedProj = projects.find(
+          (p) => p.name.toLowerCase() === newCardData.context?.toLowerCase()
+        );
+        if (matchedProj) {
+          cardToCreate.projects = [matchedProj.id];
+        } else {
+          // Create new project
+          const newProj = await createProject(currentUser.id, {
+            name: newCardData.context,
+            description: `Canal criado automaticamente para: ${newCardData.context}`,
+            itemCount: 1,
+          });
+          if (newProj) {
+            cardToCreate.projects = [newProj.id];
+            setProjects((prev) => [...prev, newProj]);
+          }
+        }
+      }
+
+      // Create card in Supabase
+      const createdCard = await createCard(currentUser.id, cardToCreate);
+      if (createdCard) {
+        setCards((prev) => [createdCard, ...prev]);
+      } else {
+        setSyncError('Erro ao criar card. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('Error saving card:', error);
+      setSyncError('Erro ao salvar card.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Handle updating existing cards
-  const handleUpdateCard = (updatedCard: Card) => {
-    setCards((prev) => prev.map((c) => (c.id === updatedCard.id ? updatedCard : c)));
-    // If we were previewing it, update selected view as well
-    if (selectedCard?.id === updatedCard.id) {
-      setSelectedCard(updatedCard);
+  const handleUpdateCard = async (updatedCard: Card) => {
+    if (!currentUser) {
+      setAuthMessage('Você precisa estar autenticado para atualizar um card.');
+      return;
+    }
+
+    try {
+      setIsSyncing(true);
+      setSyncError(null);
+
+      const result = await updateCard(currentUser.id, updatedCard);
+      if (result) {
+        setCards((prev) => prev.map((c) => (c.id === updatedCard.id ? result : c)));
+        if (selectedCard?.id === updatedCard.id) {
+          setSelectedCard(result);
+        }
+      } else {
+        setSyncError('Erro ao atualizar card ou permissão negada.');
+      }
+    } catch (error) {
+      console.error('Error updating card:', error);
+      setSyncError('Erro ao atualizar card.');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
   // Handle deleting card
-  const handleDeleteCard = (id: string) => {
-    setCards((prev) => prev.filter((c) => c.id !== id));
-    setSelectedCard(null);
+  const handleDeleteCard = async (id: string) => {
+    if (!currentUser) {
+      setAuthMessage('Você precisa estar autenticado para deletar um card.');
+      return;
+    }
+
+    try {
+      setIsSyncing(true);
+      setSyncError(null);
+
+      const success = await deleteCard(currentUser.id, id);
+      if (success) {
+        setCards((prev) => prev.filter((c) => c.id !== id));
+        setSelectedCard(null);
+      } else {
+        setSyncError('Erro ao deletar card ou permissão negada.');
+      }
+    } catch (error) {
+      console.error('Error deleting card:', error);
+      setSyncError('Erro ao deletar card.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Get list of all tags present dynamically across all cards
@@ -247,8 +379,8 @@ export default function App() {
 
   // Admin Database reset functions passed to Profile
   const handleResetDatabase = () => {
-    setCards(INITIAL_CARDS);
-    setProjects(INITIAL_PROJECTS);
+    setCards(INITIAL_CARDS.map(card => ({ ...card, user_id: currentUser?.id || '' })));
+    setProjects(INITIAL_PROJECTS.map(proj => ({ ...proj, user_id: currentUser?.id || '' })));
     setSelectedTag('Todas');
     setSearchQuery('');
     setActiveProjectFilter(null);
@@ -264,15 +396,16 @@ export default function App() {
       if (parsed.projects && Array.isArray(parsed.projects)) {
         setProjects(parsed.projects);
       }
-      alert('Sincronização e Importação de dados concluída com sucesso!');
+      setAuthMessage('Sincronização e Importação de dados concluída com sucesso!');
     } catch (e) {
-      alert('Arquivo inválido de backup JSON.');
+      setAuthMessage('Arquivo inválido de backup JSON.');
     }
   };
 
   const handleClearAll = () => {
     setCards([]);
     setProjects([]);
+    clearLocalData();
     setSelectedTag('Todas');
     setSearchQuery('');
     setActiveProjectFilter(null);
@@ -435,6 +568,7 @@ export default function App() {
                   card={selectedCard}
                   allCards={cards}
                   projects={dynamicProjects}
+                  currentUser={currentUser}
                   onBack={() => setSelectedCard(null)}
                   onUpdate={handleUpdateCard}
                   onDelete={handleDeleteCard}
